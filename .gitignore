@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+devin_session.json
+config.toml
+.DS_Store
+._*
