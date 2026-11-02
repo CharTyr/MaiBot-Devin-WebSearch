@@ -10,10 +10,10 @@
   },
   "license": "MIT",
   "urls": {
-    "repository": "https://github.com/CharTyr/MaiBot_DevinSearch",
-    "homepage": "https://github.com/CharTyr/MaiBot_DevinSearch",
-    "documentation": "https://github.com/CharTyr/MaiBot_DevinSearch",
-    "issues": "https://github.com/CharTyr/MaiBot_DevinSearch/issues"
+    "repository": "https://github.com/CharTyr/MaiBot-Devin-WebSearch",
+    "homepage": "https://github.com/CharTyr/MaiBot-Devin-WebSearch",
+    "documentation": "https://github.com/CharTyr/MaiBot-Devin-WebSearch",
+    "issues": "https://github.com/CharTyr/MaiBot-Devin-WebSearch/issues"
   },
   "host_application": {
     "min_version": "1.0.12",
