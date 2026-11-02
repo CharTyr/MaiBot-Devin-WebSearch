@@ -1,0 +1,43 @@
+{
+  "manifest_version": 2,
+  "id": "chartyr.devinsearch",
+  "version": "0.1.0",
+  "name": "DevinSearch",
+  "description": "Devin 联网搜索：用免费 Devin 账号授权后，给 Planner 一个 devin_search 工具做实时网络检索",
+  "author": {
+    "name": "CharTyr",
+    "url": "https://github.com/CharTyr"
+  },
+  "license": "MIT",
+  "urls": {
+    "repository": "https://github.com/CharTyr/MaiBot_DevinSearch",
+    "homepage": "https://github.com/CharTyr/MaiBot_DevinSearch",
+    "documentation": "https://github.com/CharTyr/MaiBot_DevinSearch",
+    "issues": "https://github.com/CharTyr/MaiBot_DevinSearch/issues"
+  },
+  "host_application": {
+    "min_version": "1.0.12",
+    "max_version": "1.99.99"
+  },
+  "sdk": {
+    "min_version": "2.7.0",
+    "max_version": "2.99.99"
+  },
+  "dependencies": [],
+  "capabilities": [
+    "config.get",
+    "tool.register",
+    "send.text"
+  ],
+  "i18n": {
+    "default_locale": "zh-CN",
+    "supported_locales": ["zh-CN"]
+  },
+  "plugin_type": "extension",
+  "display": {
+    "icon": {
+      "type": "lucide",
+      "value": "search"
+    }
+  }
+}
