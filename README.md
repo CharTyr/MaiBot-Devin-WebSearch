@@ -33,6 +33,23 @@ Windsurf `GetWebSearchResults` 请求格式、双 host 容灾、`devin-session-t
 /devin_cancel         → 取消在途授权
 ```
 
+### 权限判定
+
+`permission="operator"` 由宿主在调用插件前拦截，**非管理员发命令插件一行代码都跑不到**，只收到「你没有权限使用此命令。」。放行规则三条路任一命中：
+
+1. **本地终端**（console 直发，`bot_console` 平台）→ 无条件放行
+2. **全局 operator 名单** — `config/bot_config.toml` 的 `[plugin] permission`：
+   ```toml
+   permission = ["qq:你的QQ号"]   # 格式 platform:user_id，跨平台
+   ```
+   命中即所有 operator 命令全放行。
+3. **单命令白名单** — `[plugin] command_permissions`，给某命令单独开小灶不动全局：
+   ```toml
+   [plugin.command_permissions."chartyr.devinsearch.devin_status"]
+   allow_users = ["qq:别的号"]
+   allow_chats = ["群session_id"]
+   ```
+
 授权码兑换的 session token 落盘 `devin_session.json`（0600），opaque token 按
 365 天 fallback 记。到期/被服务端拒绝后重走 `/devin_login` 即可。
 
