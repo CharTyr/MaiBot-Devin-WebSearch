@@ -4,29 +4,30 @@
 
 ## 快速上手
 
-**部署 → 授权 → 使用，三步：**
+**装插件 → 授权 → 使用，三步：**
 
-```bash
-# 1. 部署：整目录丢进 MaiBot 的 plugins/ 下，watchfiles 自动热加载
-scp -r MaiBot-Devin-WebSearch <host>:/path/to/MaiBot/plugins/CharTyr_DevinSearch
-# 日志看到「插件 chartyr.devinsearch 注册完成」即就位
+```
+1. 安装：WebUI → 插件市场 → 搜「DevinSearch」→ 安装并启用
+   （信息源选 official，下载源默认即可，装完看日志「插件 chartyr.devinsearch 注册完成」）
 ```
 
 ```
-# 2. 授权（私聊 bot，管理员）：
+2. 授权（私聊 bot，管理员）：
 /devin_login          → 返回授权链接
    ↓ 浏览器打开链接，登录 Devin 账号（没有就去 app.devin.ai 免费注册）
 /devin_code <授权码>  → 显示「登录成功」即完成，365 天有效
 ```
 
 ```
-# 3. 使用（群里直接@她或说话触发，不需要命令）：
+3. 使用（群里直接@她或说话触发，不需要命令）：
 "查一下杀戮尖塔2最新消息"
 "这个链接讲了啥 https://..."
 "最近xxx怎么样了"
 ```
 
 工具调用条件不满足时她会直接说"联网搜索未配置"或"搜索失败"——查 `/devin_status` 定位。
+
+> **手动部署**（不走市场）：整目录丢进 `plugins/CharTyr_DevinSearch/`，watchfiles 自动热加载。
 
 ## 致谢 / Attribution
 
