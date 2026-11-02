@@ -7,8 +7,7 @@
 **装插件 → 授权 → 使用，三步：**
 
 ```
-1. 安装：WebUI → 插件市场 → 搜「DevinSearch」→ 安装并启用
-   （信息源选 official，下载源默认即可，装完看日志「插件 chartyr.devinsearch 注册完成」）
+1. 安装：MaiBot WebUI → 插件市场 → 搜「DevinSearch」→ 安装并启用
 ```
 
 ```
