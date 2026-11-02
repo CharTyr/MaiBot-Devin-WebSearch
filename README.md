@@ -96,10 +96,23 @@ config.toml    — 运行时生成（plugins/<dir>/config.toml），非源文件
 enabled = true
 config_version = "0.1.0"
 
+[webui]                        # 可选 WebUI 页，默认全部关闭
+enable_status_page = false     # 「登录状态」workspace 页
+enable_history_page = false    # 「搜索历史」sidebar 页
+history_limit = 50             # 历史保留条数（10-200）
+
 [search]
 timeout_seconds = 20   # 单节点 HTTP 超时
 max_results = 5        # devin_search 默认返回条数
 ```
+
+### WebUI 页面（默认关闭）
+
+两个页面组件与 `_manifest.json`/`webui.json` 一起注册，但 **API 端默认返回 `enabled=false` 占位**，
+关掉时页面只显示「未启用」提示、不出数据。需要时改 `[webui]` 对应开关为 `true` 即生效。
+
+- **登录状态**（workspace）：会话状态、到期时间、本次运行搜索/抓取次数，含登出按钮
+- **搜索历史**（sidebar）：devin_search 调用记录表（重启即清空），含清空按钮
 
 ## 依赖
 

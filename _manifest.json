@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "id": "chartyr.devinsearch",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "name": "DevinSearch",
   "description": "Devin 联网搜索：用免费 Devin 账号授权后，给 Planner 一个 devin_search 工具做实时网络检索",
   "author": {

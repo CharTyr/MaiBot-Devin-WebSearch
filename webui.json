@@ -1,0 +1,145 @@
+{
+  "schema_version": 2,
+  "required_capabilities": ["declarative_basic"],
+  "workspace_title": "Devin 搜索",
+  "pages": [
+    {
+      "id": "status",
+      "title": "登录状态",
+      "description": "Devin 会话状态、到期时间与调用统计。页面内容由 config [webui] enable_status_page 控制。",
+      "placement": "workspace",
+      "icon": "settings",
+      "queries": {
+        "status": { "api": "webui_status", "version": "1" }
+      },
+      "actions": {
+        "logout": {
+          "api": "webui_logout",
+          "version": "1",
+          "confirmation": "确认清除 Devin 会话？联网搜索将立即不可用，需重新 /devin_login。"
+        }
+      },
+      "content": [
+        {
+          "type": "text",
+          "value": "登录状态页未启用：请在插件配置 [webui] 中设置 enable_status_page = true。",
+          "when": {
+            "reference": { "scope": "query", "source": "status", "field": "enabled" },
+            "operator": "equals",
+            "expected": false
+          }
+        },
+        {
+          "type": "grid",
+          "columns": 3,
+          "when": {
+            "reference": { "scope": "query", "source": "status", "field": "enabled" },
+            "operator": "truthy"
+          },
+          "children": [
+            {
+              "type": "stat",
+              "label": "搜索次数（本次运行）",
+              "value": { "scope": "query", "source": "status", "field": "search_count" }
+            },
+            {
+              "type": "stat",
+              "label": "抓取次数（本次运行）",
+              "value": { "scope": "query", "source": "status", "field": "fetch_count" }
+            },
+            {
+              "type": "stat",
+              "label": "会话到期时间",
+              "value": { "scope": "query", "source": "status", "field": "expires_at" }
+            }
+          ]
+        },
+        {
+          "type": "card",
+          "label": "会话信息",
+          "when": {
+            "reference": { "scope": "query", "source": "status", "field": "enabled" },
+            "operator": "truthy"
+          },
+          "children": [
+            {
+              "type": "text",
+              "value": { "scope": "query", "source": "status", "field": "status" }
+            }
+          ]
+        },
+        {
+          "type": "button",
+          "label": "登出并清除会话",
+          "action": "logout",
+          "variant": "danger",
+          "when": {
+            "reference": { "scope": "query", "source": "status", "field": "enabled" },
+            "operator": "truthy"
+          }
+        }
+      ]
+    },
+    {
+      "id": "history",
+      "title": "搜索历史",
+      "description": "本次运行内的 devin_search 调用记录（重启即清空）。页面内容由 config [webui] enable_history_page 控制。",
+      "placement": "sidebar",
+      "icon": "list",
+      "queries": {
+        "history": { "api": "webui_history", "version": "1" }
+      },
+      "actions": {
+        "clear": {
+          "api": "webui_clear_history",
+          "version": "1",
+          "confirmation": "确认清空搜索历史？"
+        }
+      },
+      "content": [
+        {
+          "type": "text",
+          "value": "搜索历史页未启用：请在插件配置 [webui] 中设置 enable_history_page = true。",
+          "when": {
+            "reference": { "scope": "query", "source": "history", "field": "enabled" },
+            "operator": "equals",
+            "expected": false
+          }
+        },
+        {
+          "type": "stat",
+          "label": "累计搜索次数",
+          "value": { "scope": "query", "source": "history", "field": "total" },
+          "when": {
+            "reference": { "scope": "query", "source": "history", "field": "enabled" },
+            "operator": "truthy"
+          }
+        },
+        {
+          "type": "table",
+          "value": { "scope": "query", "source": "history", "field": "history" },
+          "columns": [
+            { "field": "seq", "label": "#" },
+            { "field": "query", "label": "查询" },
+            { "field": "results", "label": "结果数" },
+            { "field": "time", "label": "时间" }
+          ],
+          "when": {
+            "reference": { "scope": "query", "source": "history", "field": "enabled" },
+            "operator": "truthy"
+          }
+        },
+        {
+          "type": "button",
+          "label": "清空历史",
+          "action": "clear",
+          "variant": "danger",
+          "when": {
+            "reference": { "scope": "query", "source": "history", "field": "enabled" },
+            "operator": "truthy"
+          }
+        }
+      ]
+    }
+  ]
+}

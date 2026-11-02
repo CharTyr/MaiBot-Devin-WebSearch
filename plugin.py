@@ -18,7 +18,7 @@ import logging
 import os
 from typing import Any, Optional
 
-from maibot_sdk import Command, Field, MaiBotPlugin, PluginConfigBase, Tool
+from maibot_sdk import API, Command, Field, MaiBotPlugin, PluginConfigBase, Tool
 from maibot_sdk.types import ToolParameterInfo, ToolParamType
 
 from . import client as devin_client
@@ -27,7 +27,7 @@ from .client import DevinError, DevinSearchClient, SessionStore
 logger = logging.getLogger(__name__)
 
 PLUGIN_ID = "chartyr.devinsearch"
-PLUGIN_VERSION = "0.1.0"
+PLUGIN_VERSION = "0.2.0"
 
 
 class PluginSectionConfig(PluginConfigBase):
@@ -39,10 +39,20 @@ class PluginSectionConfig(PluginConfigBase):
     config_version: str = Field(default=PLUGIN_VERSION, description="配置版本")
 
 
+class WebUISectionConfig(PluginConfigBase):
+    __ui_label__ = "页面"
+    __ui_icon__ = "layout-dashboard"
+    __ui_order__ = 1
+
+    enable_status_page: bool = Field(default=False, description="开启 WebUI「登录状态」页")
+    enable_history_page: bool = Field(default=False, description="开启 WebUI「搜索历史」页")
+    history_limit: int = Field(default=50, description="搜索历史保留条数（10-200）")
+
+
 class SearchSectionConfig(PluginConfigBase):
     __ui_label__ = "搜索"
     __ui_icon__ = "search"
-    __ui_order__ = 1
+    __ui_order__ = 2
 
     timeout_seconds: int = Field(default=20, description="单节点 HTTP 超时秒数")
     max_results: int = Field(default=5, description="默认返回条数（1-10）")
@@ -50,6 +60,7 @@ class SearchSectionConfig(PluginConfigBase):
 
 class DevinSearchConfig(PluginConfigBase):
     plugin: PluginSectionConfig = Field(default_factory=PluginSectionConfig)
+    webui: WebUISectionConfig = Field(default_factory=WebUISectionConfig)
     search: SearchSectionConfig = Field(default_factory=SearchSectionConfig)
 
 
@@ -80,6 +91,13 @@ class DevinSearchPlugin(MaiBotPlugin):
         self._max_results = 5
         # 在途登录：code_verifier 留在内存，不落盘
         self._login_verifier: Optional[str] = None
+        # WebUI 页开关与统计
+        self._webui_status = False
+        self._webui_history = False
+        self._history_limit = 50
+        self._search_history: list[dict] = []
+        self._search_count = 0
+        self._fetch_count = 0
 
     # ---- 生命周期 ----
 
@@ -113,11 +131,14 @@ class DevinSearchPlugin(MaiBotPlugin):
 
     def _apply_config(self, config_data: Optional[dict] = None) -> None:
         section: Any = None
+        webui_sec: Any = None
         if config_data is not None:
             section = (config_data or {}).get("search")
+            webui_sec = (config_data or {}).get("webui")
         else:
             try:
                 section = getattr(self.config, "search", None)
+                webui_sec = getattr(self.config, "webui", None)
             except Exception:  # noqa: BLE001 — 未注入配置时用默认
                 section = None
         if isinstance(section, dict):
@@ -126,6 +147,16 @@ class DevinSearchPlugin(MaiBotPlugin):
         elif section is not None:
             self._timeout = int(getattr(section, "timeout_seconds", 20) or 20)
             self._max_results = int(getattr(section, "max_results", 5) or 5)
+        if isinstance(webui_sec, dict):
+            self._webui_status = bool(webui_sec.get("enable_status_page", False))
+            self._webui_history = bool(webui_sec.get("enable_history_page", False))
+            self._history_limit = max(10, min(200, int(webui_sec.get("history_limit", 50) or 50)))
+        elif webui_sec is not None:
+            self._webui_status = bool(getattr(webui_sec, "enable_status_page", False))
+            self._webui_history = bool(getattr(webui_sec, "enable_history_page", False))
+            self._history_limit = max(
+                10, min(200, int(getattr(webui_sec, "history_limit", 50) or 50))
+            )
 
     def get_components(self) -> list[dict[str, Any]]:
         """devin_search 常驻 visible（@Tool kwargs 进不了 planner 白名单）。"""
@@ -139,53 +170,6 @@ class DevinSearchPlugin(MaiBotPlugin):
                 metadata["visibility"] = "visible"
         return components
 
-
-_JINA_PREFIX = "https://r.jina.ai/"
-
-
-def _fetch_page_text(url: str, timeout: int = 20, max_chars: int = 8000) -> str:
-    """r.jina.ai 抓正文（能过多数反爬），直连 trafilatura 兜底。"""
-    import urllib.request
-
-    def _get(u: str, accept: str = "text/plain") -> str:
-        req = urllib.request.Request(
-            u,
-            headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
-                "Accept": accept,
-            },
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read(4 * 1024 * 1024).decode("utf-8", errors="replace")
-
-    # 首选 jina reader：自带渲染+反爬，直接吐干净 markdown
-    try:
-        text = _get(_JINA_PREFIX + url)
-        if text.strip():
-            return text[:max_chars]
-    except Exception:  # noqa: BLE001 — 回退直连
-        pass
-
-    html = _get(url, accept="text/html,application/xhtml+xml")
-
-    text = ""
-    try:
-        import trafilatura
-
-        text = trafilatura.extract(html, include_comments=False, include_tables=False) or ""
-    except Exception:  # noqa: BLE001
-        pass
-    if not text:
-        try:
-            from readability import Document
-            from bs4 import BeautifulSoup
-
-            text = BeautifulSoup(Document(html).summary(), "html.parser").get_text("\n")
-        except Exception:  # noqa: BLE001
-            pass
-    text = "\n".join(line for line in (l.strip() for l in text.splitlines()) if line)
-    return text[:max_chars]
 
     # ---- Planner 工具 ----
 
@@ -242,6 +226,8 @@ def _fetch_page_text(url: str, timeout: int = 20, max_chars: int = 8000) -> str:
             return False, f"搜索失败：{exc}，稍后再试。", 0
 
         sources = result.get("sources") or []
+        self._search_count += 1
+        self._record_history(str(query), len(sources))
         if not sources:
             return True, f"没有搜到「{query}」的相关结果，换个关键词试试。", 1
 
@@ -284,6 +270,11 @@ def _fetch_page_text(url: str, timeout: int = 20, max_chars: int = 8000) -> str:
         url = str(url or "").strip()
         if not url.startswith(("http://", "https://")):
             return False, "url 必须是完整的 http/https 地址。", 0
+        from urllib.parse import urlparse
+
+        host = (urlparse(url).hostname or "").strip()
+        if _is_private_host(host):
+            return False, "该地址指向内网/回环，已拦截（防 SSRF）。", 0
         try:
             text = await asyncio.to_thread(_fetch_page_text, url, self._timeout)
         except Exception as exc:  # noqa: BLE001
@@ -291,6 +282,7 @@ def _fetch_page_text(url: str, timeout: int = 20, max_chars: int = 8000) -> str:
             return False, f"抓取失败：{exc}。可能是页面需要登录或有反爬。", 0
         if not text:
             return False, "抓到的页面没有可读正文（可能是纯 JS 页面或图片站）。", 0
+        self._fetch_count += 1
         return True, text, 1
 
     # ---- 管理员命令 ----
@@ -396,6 +388,148 @@ def _fetch_page_text(url: str, timeout: int = 20, max_chars: int = 8000) -> str:
         self._store.clear()
         self._login_verifier = None
         return await self._reply("已清除本地 Devin 会话，联网搜索停用。", kwargs)
+
+    # ---- WebUI 数据源（页面由 config [webui] 控制开关，API 关时返回 enabled=false）----
+
+    def _record_history(self, query: str, count: int) -> None:
+        import time as _t
+
+        self._search_history.append(
+            {
+                "seq": self._search_count,
+                "query": query[:200],
+                "results": count,
+                "time": _t.strftime("%m-%d %H:%M:%S"),
+            }
+        )
+        self._search_history = self._search_history[-self._history_limit :]
+
+    @API("webui_status", description="登录状态页数据", version="1", public=True)
+    async def webui_status(self) -> dict[str, Any]:
+        if not self._webui_status:
+            return {"enabled": False, "status": "页面未启用"}
+        if self._store is None:
+            return {"enabled": True, "status": "插件未初始化", "logged_in": False}
+        rec = self._store.load() or {}
+        import time as _t
+
+        exp_ms = rec.get("expires_at") or 0
+        return {
+            "enabled": True,
+            "logged_in": self._store.available(),
+            "status": self._store.status_text(),
+            "expires_at": _t.strftime("%Y-%m-%d %H:%M:%S", _t.localtime(exp_ms / 1000))
+            if exp_ms
+            else "—",
+            "expiry_source": rec.get("expiry_source") or "—",
+            "revoked": bool(rec.get("revoked")),
+            "pending_login": bool(self._login_verifier),
+            "search_count": self._search_count,
+            "fetch_count": self._fetch_count,
+        }
+
+    @API("webui_history", description="搜索历史页数据", version="1", public=True)
+    async def webui_history(self) -> dict[str, Any]:
+        if not self._webui_history:
+            return {"enabled": False, "history": [], "total": 0}
+        return {
+            "enabled": True,
+            "history": list(reversed(self._search_history)),
+            "total": self._search_count,
+        }
+
+    @API("webui_logout", description="WebUI 登出按钮", version="1", public=True)
+    async def webui_logout(self) -> dict[str, Any]:
+        if self._store is None:
+            return {"ok": False, "message": "插件未初始化"}
+        self._store.clear()
+        self._login_verifier = None
+        return {"ok": True, "message": "已清除 Devin 会话"}
+
+    @API("webui_clear_history", description="清空搜索历史", version="1", public=True)
+    async def webui_clear_history(self) -> dict[str, Any]:
+        n = len(self._search_history)
+        self._search_history.clear()
+        return {"ok": True, "message": f"已清空 {n} 条历史"}
+
+
+
+
+_JINA_PREFIX = "https://r.jina.ai/"
+
+_PRIVATE_NETS = (
+    "127.", "0.", "10.", "192.168.", "169.254.",
+    "localhost", "::1", "0.0.0.0",
+)
+
+
+def _is_private_host(hostname: str) -> bool:
+    """阻断内网/回环地址，防止 devin_fetch 被当 SSRF 跳板。"""
+    import ipaddress
+
+    host = (hostname or "").strip().lower().rstrip(".")
+    if not host:
+        return True
+    if any(host.startswith(p) for p in _PRIVATE_NETS) or host.endswith((".local", ".internal", ".lan")):
+        return True
+    try:
+        ip = ipaddress.ip_address(host)
+        return not ip.is_global
+    except ValueError:
+        pass
+    # 172.16-31 与 100.64-127 段（CGNAT）要走 ip_network
+    for net in ("172.16.0.0/12", "100.64.0.0/10", "198.18.0.0/15", "192.0.0.0/24", "198.51.100.0/24", "203.0.113.0/24"):
+        try:
+            if ipaddress.ip_address(host) in ipaddress.ip_network(net):
+                return True
+        except ValueError:
+            pass
+    return False
+
+
+def _fetch_page_text(url: str, timeout: int = 20, max_chars: int = 8000) -> str:
+    """r.jina.ai 抓正文（能过多数反爬），直连 trafilatura 兜底。"""
+    import urllib.request
+
+    def _get(u: str, accept: str = "text/plain") -> str:
+        req = urllib.request.Request(
+            u,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
+                "Accept": accept,
+            },
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.read(4 * 1024 * 1024).decode("utf-8", errors="replace")
+
+    # 首选 jina reader：自带渲染+反爬，直接吐干净 markdown
+    try:
+        text = _get(_JINA_PREFIX + url)
+        if text.strip():
+            return text[:max_chars]
+    except Exception:  # noqa: BLE001 — 回退直连
+        pass
+
+    html = _get(url, accept="text/html,application/xhtml+xml")
+
+    text = ""
+    try:
+        import trafilatura
+
+        text = trafilatura.extract(html, include_comments=False, include_tables=False) or ""
+    except Exception:  # noqa: BLE001
+        pass
+    if not text:
+        try:
+            from readability import Document
+            from bs4 import BeautifulSoup
+
+            text = BeautifulSoup(Document(html).summary(), "html.parser").get_text("\n")
+        except Exception:  # noqa: BLE001
+            pass
+    text = "\n".join(line for line in (l.strip() for l in text.splitlines()) if line)
+    return text[:max_chars]
 
 
 def create_plugin() -> DevinSearchPlugin:
